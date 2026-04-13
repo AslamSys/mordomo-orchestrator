@@ -390,3 +390,34 @@ GET /api/events/stats
 - `{module}.command`: Comandos para módulos (via Action Dispatcher)
 - `tts.generate_request`: Solicitação de síntese de voz (a implementar)
 - `system.orchestrator.status`: Heartbeat e status (a implementar)
+
+---
+
+## 🔐 Vault Integration
+
+O orchestrator é o **ponto central de consulta ao vault**. Após identificar a intenção do usuário e antes de despachar ações sensíveis, o Action Dispatcher interno consulta o `mordomo-vault` com o contexto de voz da sessão.
+
+```
+Session Controller mantém: { active_person_id, confidence }
+       ↓
+Action Dispatcher detecta ação sensível (ex: PIX, trade)
+       ↓
+mordomo.vault.secret.get {
+  secret_key: "asaas_api_key",
+  requester_module: "mordomo-financas-pix",
+  auth_mode: "voice",
+  person_id: active_person_id,    ← vem do speaker.verified
+  confidence: confidence           ← vem do speaker.verified
+}
+       ↓
+Vault responde → API key é incluída no payload para o módulo destino
+```
+
+**Ações que passam pelo vault antes de despachar:**
+| Ação | Secret consultado | Confiança mínima |
+|---|---|---|
+| PIX / transferência | `asaas_api_key` | 0.95 |
+| Consulta de saldo | `asaas_api_key` | 0.80 |
+| Trade manual | escalado para investimentos-brain | — |
+
+Veja: [mordomo-vault](https://github.com/AslamSys/mordomo-vault)
