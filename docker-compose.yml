@@ -1,0 +1,13 @@
+services:
+  mordomo-orchestrator:
+    build: .
+    image: renaneunao/mordomo-orchestrator:latest
+    container_name: mordomo-orchestrator
+    restart: unless-stopped
+    env_file: .env
+    networks:
+      - mordomo-net
+
+networks:
+  mordomo-net:
+    external: true

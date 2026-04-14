@@ -421,3 +421,44 @@ Vault responde → API key é incluída no payload para o módulo destino
 | Trade manual | escalado para investimentos-brain | — |
 
 Veja: [mordomo-vault](https://github.com/AslamSys/mordomo-vault)
+
+---
+
+## 🏗️ Implementação
+
+### Estrutura do Container
+
+```
+mordomo-orchestrator/
+├── src/
+│   ├── __init__.py
+│   ├── config.py        # NATS URL, Redis URL, subjects, action routes
+│   ├── session.py       # SessionController — máquina de estados via Redis db1
+│   ├── events.py        # EventMemory — buffer circular in-memory (500 eventos)
+│   ├── vault.py         # Helper request/reply para mordomo-vault
+│   ├── dispatcher.py    # ActionDispatcher — roteia ações do brain para NATS
+│   ├── handlers.py      # Handlers NATS (speaker, speech, brain, tts, events)
+│   └── main.py          # Entry point — asyncio + subscrições NATS
+├── Dockerfile
+├── docker-compose.yml
+├── requirements.txt
+└── .env.example
+```
+
+### Infra Utilizada
+
+| Serviço | Uso |
+|---|---|
+| `mordomo-nats` | Toda comunicação — subscribe 6 subjects, publish para brain/tts/vault/módulos |
+| `mordomo-redis` (db1) | Estado de sessão por `speaker_id` (`session:{speaker_id}`, TTL 300s) |
+| `mordomo-vault` | Request/reply para buscar secrets antes de ações sensíveis (PIX, saldo) |
+
+### Fluxo Principal de Voz
+
+```
+mordomo.speaker.verified  → session.update_speaker (LISTENING)
+mordomo.speech.transcribed → set_state(THINKING) → mordomo.brain.generate
+mordomo.brain.action.*    → dispatcher → {module}.command / mordomo.vault / etc
+mordomo.tts.started       → set_state(SPEAKING)
+mordomo.tts.finished      → set_state(LISTENING)
+```
