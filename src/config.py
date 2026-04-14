@@ -17,12 +17,18 @@ SUBJECT_SPEAKER_VERIFIED = "mordomo.speaker.verified"
 SUBJECT_SPEECH_TRANSCRIBED = "mordomo.speech.transcribed"
 SUBJECT_BRAIN_ACTION = "mordomo.brain.action."  # prefix, subscribe mordomo.brain.action.*
 SUBJECT_EVENTS_WILDCARD = "*.event.>"
+SUBJECT_OPENCLAW_REQUEST = "mordomo.orchestrator.request"  # texto vindo do OpenClaw
 
 # NATS Subjects — outbound
 SUBJECT_BRAIN_GENERATE = "mordomo.brain.generate"
 SUBJECT_TTS_GENERATE = "mordomo.tts.generate"
 SUBJECT_VAULT_GET = "mordomo.vault.secret.get"
 SUBJECT_STATUS = "system.orchestrator.status"
+SUBJECT_PEOPLE_RESOLVE = "mordomo.people.resolve"
+
+# Timeouts
+OPENCLAW_BRAIN_TIMEOUT = float(os.getenv("OPENCLAW_BRAIN_TIMEOUT", "30.0"))
+OPENCLAW_PEOPLE_TIMEOUT = float(os.getenv("OPENCLAW_PEOPLE_TIMEOUT", "3.0"))
 
 # Action routing: action type → NATS subject prefix
 ACTION_ROUTES: dict[str, str] = {

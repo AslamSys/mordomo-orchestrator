@@ -437,7 +437,7 @@ mordomo-orchestrator/
 │   ├── events.py        # EventMemory — buffer circular in-memory (500 eventos)
 │   ├── vault.py         # Helper request/reply para mordomo-vault
 │   ├── dispatcher.py    # ActionDispatcher — roteia ações do brain para NATS
-│   ├── handlers.py      # Handlers NATS (speaker, speech, brain, tts, events)
+│   ├── handlers.py      # Handlers NATS (speaker, speech, brain, tts, events, openclaw)
 │   └── main.py          # Entry point — asyncio + subscrições NATS
 ├── Dockerfile
 ├── docker-compose.yml
@@ -449,9 +449,10 @@ mordomo-orchestrator/
 
 | Serviço | Uso |
 |---|---|
-| `mordomo-nats` | Toda comunicação — subscribe 6 subjects, publish para brain/tts/vault/módulos |
+| `mordomo-nats` | Toda comunicação — subscribe 7 subjects, publish para brain/tts/vault/people/módulos |
 | `mordomo-redis` (db1) | Estado de sessão por `speaker_id` (`session:{speaker_id}`, TTL 300s) |
 | `mordomo-vault` | Request/reply para buscar secrets antes de ações sensíveis (PIX, saldo) |
+| `mordomo-people` | Request/reply para resolver `user_id` (canal de texto) → `person_id` |
 
 ### Fluxo Principal de Voz
 
@@ -462,3 +463,14 @@ mordomo.brain.action.*    → dispatcher → {module}.command / mordomo.vault / 
 mordomo.tts.started       → set_state(SPEAKING)
 mordomo.tts.finished      → set_state(LISTENING)
 ```
+
+### Fluxo de Canais de Texto (OpenClaw)
+
+```
+mordomo.orchestrator.request  →  resolve person_id (mordomo.people.resolve)
+                              →  mordomo.brain.generate (request/reply)
+                              →  dispatcher → {module}.command (IoT, finanças, segurança, etc.)
+                              →  reply_to (texto de resposta de volta ao OpenClaw)
+```
+
+**OpenClaw é apenas mais uma fonte de entrada.** Não tem acesso direto a nenhum módulo — tudo passa pelo Orchestrator, que aplica as mesmas regras de vault, dispatch e auditoria do fluxo de voz.

@@ -2,10 +2,11 @@
 NATS message handlers for mordomo-orchestrator.
 
 Subscriptions:
-  mordomo.speaker.verified      → update session, mark speaker active
-  mordomo.speech.transcribed    → forward to brain
-  mordomo.brain.action.*        → dispatch to target service
-  *.event.>                     → store in EventMemory
+  mordomo.speaker.verified        → update session, mark speaker active
+  mordomo.speech.transcribed      → forward to brain
+  mordomo.brain.action.*          → dispatch to target service
+  *.event.>                       → store in EventMemory
+  mordomo.orchestrator.request    → handle text requests from OpenClaw (WhatsApp/Telegram/etc.)
 """
 
 import json
@@ -99,3 +100,88 @@ async def handle_external_event(msg: Msg) -> None:
         event_memory.store(msg.subject, data)
     except Exception as exc:
         logger.error("handle_external_event error: %s", exc)
+
+
+async def handle_openclaw_request(nc: NATS, msg: Msg) -> None:
+    """
+    Handle text-channel requests coming from OpenClaw (WhatsApp, Telegram, etc.).
+
+    Expected payload:
+      {
+        "user_id":   str,       # channel identifier: "whatsapp:+55...", "telegram:123..."
+        "channel":   str,       # "whatsapp" | "telegram" | "discord" | ...
+        "text":      str,       # raw user message
+        "session_id": str       # optional openclaw session id
+      }
+
+    Flow:
+      1. Resolve person_id via mordomo.people.resolve
+      2. Ask brain via mordomo.brain.generate (request/reply)
+      3. Dispatch any actions[] returned by brain
+      4. Reply with text on msg.reply (NATS request/reply)
+    """
+    if not msg.reply:
+        logger.warning("handle_openclaw_request: no reply-to, dropping message")
+        return
+
+    try:
+        data = json.loads(msg.data.decode())
+        user_id: str = data.get("user_id", "unknown")
+        channel: str = data.get("channel", "unknown")
+        text: str = data.get("text", "").strip()
+
+        if not text:
+            await nc.publish(msg.reply, json.dumps({"text": "", "error": "empty text"}).encode())
+            return
+
+        # 1. Resolve person_id via mordomo-people
+        speaker_id = user_id
+        confidence = 1.0  # text channels have full identity certainty
+        try:
+            people_payload = json.dumps({"identifier": user_id, "channel": channel}).encode()
+            people_resp = await nc.request(
+                config.SUBJECT_PEOPLE_RESOLVE,
+                people_payload,
+                timeout=config.OPENCLAW_PEOPLE_TIMEOUT,
+            )
+            person_data = json.loads(people_resp.data.decode())
+            if person_data.get("person_id"):
+                speaker_id = person_data["person_id"]
+        except Exception as exc:
+            logger.warning("people.resolve failed for %s: %s — using raw user_id", user_id, exc)
+
+        # 2. Ask brain
+        brain_payload = json.dumps({
+            "speaker_id": speaker_id,
+            "text": text,
+            "confidence": confidence,
+        }).encode()
+
+        brain_resp = await nc.request(
+            config.SUBJECT_BRAIN_GENERATE,
+            brain_payload,
+            timeout=config.OPENCLAW_BRAIN_TIMEOUT,
+        )
+        brain_data = json.loads(brain_resp.data.decode())
+        reply_text: str = brain_data.get("text", "")
+        actions: list = brain_data.get("actions", [])
+
+        # 3. Dispatch actions (fire-and-forget, same as voice flow)
+        for action in actions:
+            action_type = action.pop("type", None)
+            if action_type:
+                try:
+                    await dispatcher.dispatch(nc, action_type, action, speaker_id, confidence)
+                except Exception as exc:
+                    logger.error("dispatch error for action %s: %s", action_type, exc)
+
+        # 4. Reply to OpenClaw
+        await nc.publish(msg.reply, json.dumps({"text": reply_text}).encode())
+        logger.info("openclaw_request handled: channel=%s speaker=%s text='%s'", channel, speaker_id, text[:60])
+
+    except Exception as exc:
+        logger.error("handle_openclaw_request error: %s", exc)
+        try:
+            await nc.publish(msg.reply, json.dumps({"text": "Desculpe, ocorreu um erro interno.", "error": str(exc)}).encode())
+        except Exception:
+            pass

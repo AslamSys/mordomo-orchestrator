@@ -2,12 +2,13 @@
 mordomo-orchestrator — entry point.
 
 Subscriptions:
-  mordomo.speaker.verified    → session update
-  mordomo.speech.transcribed  → forward to brain
-  mordomo.brain.action.*      → action dispatch
-  mordomo.tts.started         → session SPEAKING
-  mordomo.tts.finished        → session LISTENING
-  *.event.>                   → event memory
+  mordomo.speaker.verified        → session update
+  mordomo.speech.transcribed      → forward to brain
+  mordomo.brain.action.*          → action dispatch
+  mordomo.tts.started             → session SPEAKING
+  mordomo.tts.finished            → session LISTENING
+  *.event.>                       → event memory
+  mordomo.orchestrator.request    → text requests from OpenClaw
 """
 
 import asyncio
@@ -22,6 +23,7 @@ from .events import memory as event_memory
 from .handlers import (
     handle_brain_action,
     handle_external_event,
+    handle_openclaw_request,
     handle_speaker_verified,
     handle_speech_transcribed,
     handle_tts_finished,
@@ -77,6 +79,10 @@ async def main() -> None:
     await nc.subscribe(
         config.SUBJECT_EVENTS_WILDCARD,
         cb=handle_external_event,
+    )
+    await nc.subscribe(
+        config.SUBJECT_OPENCLAW_REQUEST,
+        cb=lambda msg: asyncio.create_task(handle_openclaw_request(nc, msg)),
     )
 
     logger.info("mordomo-orchestrator ready")
