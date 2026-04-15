@@ -16,7 +16,6 @@
 - [mordomo-brain](https://github.com/AslamSys/mordomo-brain)
 - [mordomo-tts-engine](https://github.com/AslamSys/mordomo-tts-engine)
 - [mordomo-system-watchdog](https://github.com/AslamSys/mordomo-system-watchdog)
-- [mordomo-dashboard-ui](https://github.com/AslamSys/mordomo-dashboard-ui)
 - [mordomo-openclaw-agent](https://github.com/AslamSys/mordomo-openclaw-agent)
 
 ---
@@ -48,7 +47,6 @@ Responsável pela inteligência e execução.
 -   **Event Memory**: Armazena histórico de eventos para consultas contextuais do LLM.
     -   Permite perguntas como: _"Quem me mandou mensagem há 10 minutos?"_
     -   _"Sobre o que estávamos falando quanto aos RPAs?"_
--   **API REST**: Serve o Dashboard e Apps externos.
 
 ## 🔄 Dois Fluxos de Comunicação
 
@@ -170,9 +168,7 @@ model ActionLog {
 -   `mordomo.tts.generate_request`: Saída para síntese de voz.
 -   `iot.command.*`: Comandos para dispositivos.
 
-### REST API (Dashboard)
--   `GET /api/v1/conversations`: Histórico de conversas.
--   `POST /api/v1/users`: Gestão de usuários.
+### REST API (Futuro)
 -   `GET /api/v1/status`: Saúde do sistema.
 
 ## 🛠️ Stack Técnica do Container
@@ -277,7 +273,6 @@ TTS: Síntese de voz
 - [mordomo-brain](https://github.com/AslamSys/mordomo-brain)
 - [mordomo-tts-engine](https://github.com/AslamSys/mordomo-tts-engine)
 - [mordomo-system-watchdog](https://github.com/AslamSys/mordomo-system-watchdog)
-- [mordomo-dashboard-ui](https://github.com/AslamSys/mordomo-dashboard-ui)
 - [mordomo-openclaw-agent](https://github.com/AslamSys/mordomo-openclaw-agent)
 
 ---
@@ -301,7 +296,6 @@ GET /api/events/recent?minutes=30&module=mensagens
 - [mordomo-brain](https://github.com/AslamSys/mordomo-brain)
 - [mordomo-tts-engine](https://github.com/AslamSys/mordomo-tts-engine)
 - [mordomo-system-watchdog](https://github.com/AslamSys/mordomo-system-watchdog)
-- [mordomo-dashboard-ui](https://github.com/AslamSys/mordomo-dashboard-ui)
 - [mordomo-openclaw-agent](https://github.com/AslamSys/mordomo-openclaw-agent)
 
 ---
@@ -325,7 +319,6 @@ GET /api/events/context?query=quem me mandou mensagem há 10 minutos
 - [mordomo-brain](https://github.com/AslamSys/mordomo-brain)
 - [mordomo-tts-engine](https://github.com/AslamSys/mordomo-tts-engine)
 - [mordomo-system-watchdog](https://github.com/AslamSys/mordomo-system-watchdog)
-- [mordomo-dashboard-ui](https://github.com/AslamSys/mordomo-dashboard-ui)
 - [mordomo-openclaw-agent](https://github.com/AslamSys/mordomo-openclaw-agent)
 
 ---
@@ -367,7 +360,7 @@ GET /api/events/stats
 - ✅ **LLM Service**: LiteLLM com fallback Cloud → Local (qwen2.5:1.5b)
 - ✅ **Semantic Cache**: FAISS para bypass de LLM em comandos frequentes
 - ⏳ **Session Controller**: Máquina de estados de conversação (a implementar)
-- ⏳ **REST API**: Endpoints para Dashboard UI (parcialmente implementado)
+- ⏳ **REST API**: Endpoint de status/saúde (a implementar)
 - ⏳ **PostgreSQL Integration**: Persistência de conversas e logs (a implementar)
 
 ## 🔌 Integrações NATS
