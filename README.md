@@ -18,8 +18,6 @@
 - [mordomo-system-watchdog](https://github.com/AslamSys/mordomo-system-watchdog)
 - [mordomo-dashboard-ui](https://github.com/AslamSys/mordomo-dashboard-ui)
 - [mordomo-openclaw-agent](https://github.com/AslamSys/mordomo-openclaw-agent)
-- [mordomo-action-dispatcher](https://github.com/AslamSys/mordomo-action-dispatcher)
-- [mordomo-skills-runner](https://github.com/AslamSys/mordomo-skills-runner)
 
 ---
 
@@ -45,7 +43,6 @@ Responsável pela inteligência e execução.
     -   **Modelo Local**: `qwen2.5:1.5b` (Leve e rápido para fallback).
 -   **Action Dispatcher**: Sistema universal de roteamento para módulos externos.
 -   **Skills Client**: Interface para delegar execução de código Python.
-    -   **Nível 1 (Tático):** Envia scripts rápidos para o `skills-runner` (ex: cotação, cálculos).
     -   **Nível 2 (Estratégico):** Envia intenções complexas para o Módulo RPA (ex: projetos de scraping).
 -   **Event System**: Processa notificações assíncronas dos módulos com fila de prioridade.
 -   **Event Memory**: Armazena histórico de eventos para consultas contextuais do LLM.
@@ -282,8 +279,6 @@ TTS: Síntese de voz
 - [mordomo-system-watchdog](https://github.com/AslamSys/mordomo-system-watchdog)
 - [mordomo-dashboard-ui](https://github.com/AslamSys/mordomo-dashboard-ui)
 - [mordomo-openclaw-agent](https://github.com/AslamSys/mordomo-openclaw-agent)
-- [mordomo-action-dispatcher](https://github.com/AslamSys/mordomo-action-dispatcher)
-- [mordomo-skills-runner](https://github.com/AslamSys/mordomo-skills-runner)
 
 ---
 GET /api/events/recent?minutes=30&module=mensagens
@@ -308,8 +303,6 @@ GET /api/events/recent?minutes=30&module=mensagens
 - [mordomo-system-watchdog](https://github.com/AslamSys/mordomo-system-watchdog)
 - [mordomo-dashboard-ui](https://github.com/AslamSys/mordomo-dashboard-ui)
 - [mordomo-openclaw-agent](https://github.com/AslamSys/mordomo-openclaw-agent)
-- [mordomo-action-dispatcher](https://github.com/AslamSys/mordomo-action-dispatcher)
-- [mordomo-skills-runner](https://github.com/AslamSys/mordomo-skills-runner)
 
 ---
 GET /api/events/context?query=quem me mandou mensagem há 10 minutos
@@ -334,8 +327,6 @@ GET /api/events/context?query=quem me mandou mensagem há 10 minutos
 - [mordomo-system-watchdog](https://github.com/AslamSys/mordomo-system-watchdog)
 - [mordomo-dashboard-ui](https://github.com/AslamSys/mordomo-dashboard-ui)
 - [mordomo-openclaw-agent](https://github.com/AslamSys/mordomo-openclaw-agent)
-- [mordomo-action-dispatcher](https://github.com/AslamSys/mordomo-action-dispatcher)
-- [mordomo-skills-runner](https://github.com/AslamSys/mordomo-skills-runner)
 
 ---
 GET /api/events/stats
