@@ -17,6 +17,7 @@ import signal
 
 import nats
 from nats.aio.client import Client as NATS
+from nats.aio.msg import Msg
 
 from . import config, session
 from .events import memory as event_memory
@@ -56,17 +57,26 @@ async def main() -> None:
     )
     logger.info("connected to NATS at %s", config.NATS_URL)
 
+    async def _on_speech_transcribed(msg: Msg) -> None:
+        asyncio.create_task(handle_speech_transcribed(nc, msg))
+
+    async def _on_brain_action(msg: Msg) -> None:
+        asyncio.create_task(handle_brain_action(nc, msg))
+
+    async def _on_openclaw_request(msg: Msg) -> None:
+        asyncio.create_task(handle_openclaw_request(nc, msg))
+
     await nc.subscribe(
         config.SUBJECT_SPEAKER_VERIFIED,
         cb=handle_speaker_verified,
     )
     await nc.subscribe(
         config.SUBJECT_SPEECH_TRANSCRIBED,
-        cb=lambda msg: asyncio.create_task(handle_speech_transcribed(nc, msg)),
+        cb=_on_speech_transcribed,
     )
     await nc.subscribe(
         config.SUBJECT_BRAIN_ACTION + "*",
-        cb=lambda msg: asyncio.create_task(handle_brain_action(nc, msg)),
+        cb=_on_brain_action,
     )
     await nc.subscribe(
         "mordomo.tts.started",
@@ -82,7 +92,7 @@ async def main() -> None:
     )
     await nc.subscribe(
         config.SUBJECT_OPENCLAW_REQUEST,
-        cb=lambda msg: asyncio.create_task(handle_openclaw_request(nc, msg)),
+        cb=_on_openclaw_request,
     )
 
     logger.info("mordomo-orchestrator ready")
