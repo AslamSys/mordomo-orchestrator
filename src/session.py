@@ -72,3 +72,17 @@ async def close() -> None:
     if _redis:
         await _redis.aclose()
         _redis = None
+
+
+async def get_any_active_speaker() -> str | None:
+    """Return the speaker_id of any session currently in LISTENING, THINKING, or SPEAKING state."""
+    r = await get_redis()
+    keys = await r.keys("session:*")
+    for key in keys:
+        raw = await r.get(key)
+        if not raw:
+            continue
+        data = json.loads(raw)
+        if data.get("state") in (SessionState.LISTENING, SessionState.THINKING, SessionState.SPEAKING):
+            return data.get("speaker_id")
+    return None

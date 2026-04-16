@@ -5,6 +5,7 @@ Subscriptions:
   mordomo.speaker.verified        → update session, mark speaker active
   mordomo.speech.transcribed      → forward to brain
   mordomo.brain.action.*          → dispatch to target service
+  iot.command.executed            → log IoT result (success/failure)
   *.event.>                       → store in EventMemory
   mordomo.orchestrator.request    → handle text requests from OpenClaw (WhatsApp/Telegram/etc.)
 """
@@ -100,6 +101,46 @@ async def handle_external_event(msg: Msg) -> None:
         event_memory.store(msg.subject, data)
     except Exception as exc:
         logger.error("handle_external_event error: %s", exc)
+
+
+async def handle_iot_result(nc: NATS, msg: Msg) -> None:
+    """
+    Receive execution confirmation from mordomo-iot-orchestrator.
+
+    Expected payload (published on iot.command.executed):
+      {
+        "command_id": str,
+        "device_id":  str,
+        "success":    bool,
+        "latency_ms": int,
+        "error":      str | None   # only on failure
+      }
+
+    On failure: publishes TTS correction to the active session speaker.
+    On success: logs only (state is tracked in Redis db2 by iot-orchestrator).
+    """
+    try:
+        data = json.loads(msg.data.decode())
+        device_id = data.get("device_id", "unknown")
+        success = data.get("success", True)
+        error = data.get("error")
+
+        event_memory.store(msg.subject, data)
+
+        if not success:
+            logger.warning("IoT command failed for device %s: %s", device_id, error)
+            # Find the most recent active speaker to send a correction
+            active = await session.get_any_active_speaker()
+            if active:
+                tts_payload = json.dumps({
+                    "speaker_id": active,
+                    "text": f"Não consegui executar o comando no dispositivo {device_id}.",
+                }).encode()
+                await nc.publish(config.SUBJECT_TTS_GENERATE, tts_payload)
+        else:
+            logger.info("IoT command executed: device=%s latency=%sms", device_id, data.get("latency_ms"))
+    except Exception as exc:
+        logger.error("handle_iot_result error: %s", exc)
 
 
 async def handle_openclaw_request(nc: NATS, msg: Msg) -> None:

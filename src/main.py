@@ -7,6 +7,7 @@ Subscriptions:
   mordomo.brain.action.*          → action dispatch
   mordomo.tts.started             → session SPEAKING
   mordomo.tts.finished            → session LISTENING
+  iot.command.executed            → IoT result feedback (TTS correction on failure)
   *.event.>                       → event memory
   mordomo.orchestrator.request    → text requests from OpenClaw
 """
@@ -25,6 +26,7 @@ from .routes import init_routes
 from .handlers import (
     handle_brain_action,
     handle_external_event,
+    handle_iot_result,
     handle_openclaw_request,
     handle_speaker_verified,
     handle_speech_transcribed,
@@ -89,6 +91,13 @@ async def main() -> None:
     await nc.subscribe(
         "mordomo.tts.finished",
         cb=handle_tts_finished,
+    )
+    async def _on_iot_result(msg: Msg) -> None:
+        asyncio.create_task(handle_iot_result(nc, msg))
+
+    await nc.subscribe(
+        "iot.command.executed",
+        cb=_on_iot_result,
     )
     await nc.subscribe(
         config.SUBJECT_EVENTS_WILDCARD,

@@ -1,460 +1,231 @@
-# Mordomo Orchestrator
+﻿# 🎼 mordomo-orchestrator
 
 ## 🔗 Navegação
 
 **[🏠 AslamSys](https://github.com/AslamSys)** → **[📚 _system](https://github.com/AslamSys/_system)** → **[📂 Aslam (Orange Pi 5 16GB)](https://github.com/AslamSys/_system/blob/main/hardware/mordomo%20-%20(orange-pi-5-16gb)/README.md)** → **mordomo-orchestrator**
 
-### Containers Relacionados (aslam)
-- [mordomo-audio-bridge](https://github.com/AslamSys/mordomo-audio-bridge)
-- [mordomo-audio-capture-vad](https://github.com/AslamSys/mordomo-audio-capture-vad)
-- [mordomo-wake-word-detector](https://github.com/AslamSys/mordomo-wake-word-detector)
+### Containers Relacionados (brain)
+- [mordomo-brain](https://github.com/AslamSys/mordomo-brain)
+- [mordomo-people](https://github.com/AslamSys/mordomo-people)
+- [mordomo-vault](https://github.com/AslamSys/mordomo-vault)
+- [mordomo-tts-engine](https://github.com/AslamSys/mordomo-tts-engine)
+- [mordomo-iot-orchestrator](https://github.com/AslamSys/mordomo-iot-orchestrator)
+- [mordomo-financas-pix](https://github.com/AslamSys/mordomo-financas-pix)
+- [mordomo-financas-contas](https://github.com/AslamSys/mordomo-financas-contas)
 - [mordomo-speaker-verification](https://github.com/AslamSys/mordomo-speaker-verification)
 - [mordomo-whisper-asr](https://github.com/AslamSys/mordomo-whisper-asr)
-- [mordomo-speaker-id-diarization](https://github.com/AslamSys/mordomo-speaker-id-diarization)
-- [mordomo-source-separation](https://github.com/AslamSys/mordomo-source-separation)
-- [mordomo-core-gateway](https://github.com/AslamSys/mordomo-core-gateway)
-- [mordomo-brain](https://github.com/AslamSys/mordomo-brain)
-- [mordomo-tts-engine](https://github.com/AslamSys/mordomo-tts-engine)
-- [mordomo-system-watchdog](https://github.com/AslamSys/mordomo-system-watchdog)
-- [mordomo-openclaw-agent](https://github.com/AslamSys/mordomo-openclaw-agent)
+- [infra/redis](https://github.com/AslamSys/mordomo-deploy) — db1 (sessions + routes)
 
 ---
 
-## 🎯 Visão Geral
-O **Mordomo Orchestrator** unifica a execução física do sistema para otimizar recursos no Orange Pi 5, mas mantém a **separação lógica** de responsabilidades em dois módulos internos distintos:
-
-1.  **Session Controller (antigo Conversation Manager)**: Gerencia a "forma" da interação (estado da voz, turn-taking, interrupções).
-2.  **System Core (antigo Core API)**: Gerencia o "conteúdo" (LLM, ferramentas, banco de dados, integrações).
-
-## 🚀 Módulos Internos
-
-### 1. Session Controller (Gerente de Sessão)
-Responsável pela fluidez da interação de voz.
--   **Máquina de Estados**: Controla se o robô está `OUVINDO`, `PENSANDO` ou `FALANDO`.
--   **Gestão de Interrupção**: Se o usuário falar enquanto o robô fala, este módulo envia o sinal de `STOP` para o TTS imediatamente.
--   **Identificação**: Mantém o `speaker_id` ativo na sessão.
-
-### 2. System Core (Cérebro Executivo)
-Responsável pela inteligência e execução.
--   **Semantic Cache**: Intercepta inputs antes do LLM para comandos frequentes.
--   **LLM Gateway (LiteLLM)**: Gerencia chamadas para modelos de IA.
-    -   **Estratégia**: API First (OpenAI/Anthropic/Groq) -> Fallback Local.
-    -   **Modelo Local**: `qwen2.5:1.5b` (Leve e rápido para fallback).
--   **Action Dispatcher**: Sistema universal de roteamento para módulos externos.
--   **Skills Client**: Interface para delegar execução de código Python.
-    -   **Nível 2 (Estratégico):** Envia intenções complexas para o Módulo RPA (ex: projetos de scraping).
--   **Event System**: Processa notificações assíncronas dos módulos com fila de prioridade.
--   **Event Memory**: Armazena histórico de eventos para consultas contextuais do LLM.
-    -   Permite perguntas como: _"Quem me mandou mensagem há 10 minutos?"_
-    -   _"Sobre o que estávamos falando quanto aos RPAs?"_
-
-## 🔄 Dois Fluxos de Comunicação
-
-### A. Request-Reply (Mordomo → Módulos)
-**Fluxo iniciado pelo usuário ou LLM.**
-```
-Usuário: "Ligar luz da sala"
-  ↓
-LLM interpreta → {"module": "iot", "action": "turn_on", "params": {"device": "luz_sala"}}
-  ↓
-Action Dispatcher consulta Consul → Valida ação → Publica NATS (iot.command)
-  ↓
-Módulo IoT executa → Responde via NATS (iot.response)
-  ↓
-Dispatcher retorna resultado → TTS: "Luz da sala ligada"
-```
-
-### B. Event-Driven (Módulos → Mordomo)
-**Fluxo iniciado por eventos externos.**
-```
-Câmera detecta intruso
-  ↓
-Módulo Security publica evento → security.event.intrusion_detected (priority=CRITICAL)
-  ↓
-Event Queue enfileira com prioridade máxima
-  ↓
-Event Handler executa automaticamente:
-  1. Liga todas as luzes (via Action Dispatcher)
-  2. Toca sirene
-  3. Envia notificação push
-  4. TTS: "Intruso detectado!"
-```
-
-## 🧠 Arquitetura do Semantic Cache
-
-O Semantic Cache é um módulo interno projetado para "curto-circuitar" o fluxo de processamento, evitando chamadas caras e lentas ao LLM para comandos triviais.
-
-### Fluxo de Processamento
-```mermaid
-graph TD
-    A[STT Input] --> B(Mordomo Orchestrator)
-    B --> C{Semantic Cache?}
-    C -- Hit (>0.95) --> D[Executa Ação Mapeada]
-    C -- Miss --> E[LLM / Brain]
-    E --> F[Interpreta Intenção]
-    F --> G[Executa Ação]
-    G --> H[Atualiza Cache]
-```
-
-### Stack Tecnológica do Cache
--   **Modelo de Embeddings**: `all-MiniLM-L6-v2` (Quantizado INT8).
-    -   Tamanho: ~20MB.
-    -   Velocidade: < 10ms em CPU (Orange Pi 5).
--   **Vector Store**: FAISS (Facebook AI Similarity Search) em modo in-memory ou Qdrant (modo embedded).
--   **Persistência**: SQLite (para mapeamento Vector ID -> Ação JSON).
-
-## 🔐 Sistema de Permissões e Segurança (Herdado)
-
-O Orchestrator implementa o sistema de permissões hierárquico anteriormente definido no Conversation Manager.
-
-### Níveis de Acesso
-- **Nível 0 (Público)**: Clima, Música, Perguntas Gerais.
-- **Nível 3 (Residente)**: Iluminação (cômodo atual).
-- **Nível 5 (Família)**: Termostatos, Câmeras (visualização).
-- **Nível 8 (Admin/Pais)**: Alarmes, Automações, Fechaduras.
-- **Nível 10 (Root)**: Scripts, Gestão de Usuários, Configuração do Sistema.
-
-### Fluxo de Verificação
-1.  **Identificação**: O `speaker_id` vem do módulo de Diarização.
-2.  **Verificação de Sessão**: Se a sessão foi iniciada por um Admin, mas uma voz desconhecida ou de nível inferior tenta um comando crítico, o sistema bloqueia (Prevenção de Escalação de Privilégio).
-3.  **Validação de Módulo**: Verifica se o usuário tem nível suficiente para o módulo solicitado (ex: `lights`, `alarm`).
-
-## 🗄️ Modelo de Dados Unificado (PostgreSQL)
-
-O schema do banco de dados unifica as necessidades de sessão e histórico.
-
-```prisma
-model User {
-  user_id         String    @id @db.VarChar(50)
-  name            String    @db.VarChar(100)
-  level           Int       @default(0)
-  is_guest        Boolean   @default(false)
-  allowed_modules String[]  // Para convidados restritos
-  conversations   Conversation[]
-  action_logs     ActionLog[]
-}
-
-model Conversation {
-  id         String    @id @default(uuid())
-  speaker_id String    @db.VarChar(50)
-  started_at DateTime  @default(now())
-  status     Status    @default(ACTIVE) // ACTIVE, COMPLETED, INTERRUPTED
-  messages   Message[]
-}
-
-model Message {
-  id              String   @id @default(uuid())
-  conversation_id String
-  role            Role     // USER, ASSISTANT, SYSTEM
-  content         String   @db.Text
-  timestamp       DateTime @default(now())
-}
-
-model ActionLog {
-  id            Int      @id @default(autoincrement())
-  user_id       String
-  action        String
-  allowed       Boolean
-  denial_reason String?
-  timestamp     DateTime @default(now())
-}
-```
-
-## 🔌 Interfaces e API
-
-### NATS Topics (Event Driven)
--   `mordomo.speech.transcribed`: Entrada de texto do STT.
--   `mordomo.brain.process_request`: (Interno) Solicita processamento LLM.
--   `mordomo.tts.generate_request`: Saída para síntese de voz.
--   `iot.command.*`: Comandos para dispositivos.
-
-### REST API (Futuro)
--   `GET /api/v1/status`: Saúde do sistema.
-
-## 🛠️ Stack Técnica do Container
-
--   **Linguagem**: Python 3.11+ (FastAPI).
--   **Servidor**: Uvicorn (com `uvloop` para performance).
--   **Comunicação**: `nats-py` (Cliente NATS assíncrono).
--   **Banco de Dados**: Conexão direta com PostgreSQL (TimescaleDB) para logs e Qdrant para vetores.
-
-## 📊 Estimativa de Recursos
-
-| Componente | RAM Estimada | CPU (Média) |
-| :--- | :--- | :--- |
-| Core (FastAPI + Logic) | 120MB | 5% |
-| Semantic Cache (Model + Index) | 150MB | 10% (pico) |
-| Action Dispatcher + Event Queue | 50MB | 3% |
-| NATS & DB Connectors | 30MB | 2% |
-| **TOTAL** | **~350MB** | **~20%** |
-
-> **Comparativo**: A solução anterior (`conversation-manager` + `mordomo-core-api`) consumia ~500MB combinados. A unificação economiza ~150MB de RAM e reduz latência de comunicação interna.
-
-## 📝 Estrutura de Pastas
-
-```
-mordomo-orchestrator/
-├── src/
-│   ├── api/                          # Endpoints REST/WebSocket
-│   ├── core/
-│   │   ├── cache/
-│   │   │   └── semantic_cache.py     # Cache vetorial (FAISS)
-│   │   ├── context/                  # Gerenciador de Contexto de Conversa
-│   │   ├── dispatcher/
-│   │   │   ├── service_discovery.py  # Integração Consul
-│   │   │   ├── action_dispatcher.py  # Request-Reply pattern
-│   │   │   └── README.md
-│   │   ├── events/
-│   │   │   ├── event_queue.py        # Fila de prioridade
-│   │   │   ├── event_memory.py       # ✨ NOVO: Armazena eventos para consultas LLM
-│   │   │   ├── handlers.py           # Políticas de reação a eventos
-│   │   │   ├── README.md
-│   │   │   └── EVENT_MEMORY.md       # ✨ Documentação completa
-│   │   └── llm/
-│   │       └── service.py            # LiteLLM (Cloud + Fallback)
-│   ├── models/                       # Pydantic Models
-│   └── services/                     # Serviços auxiliares
-├── config/
-├── tests/
-├── Dockerfile
-├── requirements.txt
-└── main.py
-```
-
-## 🧠 Event Memory - Consultas Contextuais
-
-### Propósito
-Permite que o usuário faça perguntas sobre eventos recentes, como:
-- _"Quem me mandou mensagem no WhatsApp há 10 minutos?"_
-- _"Sobre o que estávamos falando quanto aos RPAs?"_
-- _"Qual foi a última encomenda entregue?"_
-
-### Como Funciona
-1. **Armazenamento Automático**: Todos os eventos processados são salvos na Event Memory com metadados completos
-2. **Indexação Múltipla**: Eventos indexados por módulo, tipo e timestamp para busca rápida
-3. **API REST**: LLM consulta via `/api/events/context?query=...` para obter contexto
-4. **Contexto Formatado**: Event Memory retorna texto estruturado pronto para injetar no prompt do LLM
-
-### Exemplo de Fluxo
-```
-Usuário: "Aslam, quem me mandou mensagem há 10 minutos?"
-  ↓
-STT → Orchestrator → LLM detecta query sobre evento passado
-  ↓
-LLM: GET /api/events/context?query=quem me mandou mensagem há 10 minutos
-  ↓
-Event Memory retorna:
-  "1. [15:30] mensagens.message_received
-   De: João Silva (whatsapp)
-   Mensagem: Confirma reunião amanhã?"
-  ↓
-LLM responde: "Foi o João Silva, ele perguntou sobre a reunião de amanhã"
-  ↓
-TTS: Síntese de voz
-```
-
-### API Endpoints
-```http
-# Eventos recentes (filtro flexível)
-
-## 🔗 Navegação
-
-**[🏠 AslamSys](https://github.com/AslamSys)** → **[📚 _system](https://github.com/AslamSys/_system)** → **[📂 Aslam (Orange Pi 5 16GB)](https://github.com/AslamSys/_system/blob/main/hardware/mordomo%20-%20(orange-pi-5-16gb)/README.md)** → **mordomo-orchestrator**
-
-### Containers Relacionados (aslam)
-- [mordomo-audio-bridge](https://github.com/AslamSys/mordomo-audio-bridge)
-- [mordomo-audio-capture-vad](https://github.com/AslamSys/mordomo-audio-capture-vad)
-- [mordomo-wake-word-detector](https://github.com/AslamSys/mordomo-wake-word-detector)
-- [mordomo-speaker-verification](https://github.com/AslamSys/mordomo-speaker-verification)
-- [mordomo-whisper-asr](https://github.com/AslamSys/mordomo-whisper-asr)
-- [mordomo-speaker-id-diarization](https://github.com/AslamSys/mordomo-speaker-id-diarization)
-- [mordomo-source-separation](https://github.com/AslamSys/mordomo-source-separation)
-- [mordomo-core-gateway](https://github.com/AslamSys/mordomo-core-gateway)
-- [mordomo-brain](https://github.com/AslamSys/mordomo-brain)
-- [mordomo-tts-engine](https://github.com/AslamSys/mordomo-tts-engine)
-- [mordomo-system-watchdog](https://github.com/AslamSys/mordomo-system-watchdog)
-- [mordomo-openclaw-agent](https://github.com/AslamSys/mordomo-openclaw-agent)
+**Container:** `mordomo-orchestrator`  
+**Ecossistema:** Brain  
+**Hardware:** Orange Pi 5 Ultra  
+**Linguagem:** Python 3.11 (asyncio + nats-py)
 
 ---
-GET /api/events/recent?minutes=30&module=mensagens
 
-# Contexto formatado para LLM
+## 📋 Propósito
 
-## 🔗 Navegação
-
-**[🏠 AslamSys](https://github.com/AslamSys)** → **[📚 _system](https://github.com/AslamSys/_system)** → **[📂 Aslam (Orange Pi 5 16GB)](https://github.com/AslamSys/_system/blob/main/hardware/mordomo%20-%20(orange-pi-5-16gb)/README.md)** → **mordomo-orchestrator**
-
-### Containers Relacionados (aslam)
-- [mordomo-audio-bridge](https://github.com/AslamSys/mordomo-audio-bridge)
-- [mordomo-audio-capture-vad](https://github.com/AslamSys/mordomo-audio-capture-vad)
-- [mordomo-wake-word-detector](https://github.com/AslamSys/mordomo-wake-word-detector)
-- [mordomo-speaker-verification](https://github.com/AslamSys/mordomo-speaker-verification)
-- [mordomo-whisper-asr](https://github.com/AslamSys/mordomo-whisper-asr)
-- [mordomo-speaker-id-diarization](https://github.com/AslamSys/mordomo-speaker-id-diarization)
-- [mordomo-source-separation](https://github.com/AslamSys/mordomo-source-separation)
-- [mordomo-core-gateway](https://github.com/AslamSys/mordomo-core-gateway)
-- [mordomo-brain](https://github.com/AslamSys/mordomo-brain)
-- [mordomo-tts-engine](https://github.com/AslamSys/mordomo-tts-engine)
-- [mordomo-system-watchdog](https://github.com/AslamSys/mordomo-system-watchdog)
-- [mordomo-openclaw-agent](https://github.com/AslamSys/mordomo-openclaw-agent)
+Orquestrador central do Mordomo. Gerencia sessões de usuário, aplica o gate de autorização por voz, encaminha transcrições ao brain, despacha ações retornadas, e fecha o loop de resultado (feedback de falhas via TTS).
 
 ---
-GET /api/events/context?query=quem me mandou mensagem há 10 minutos
 
-# Estatísticas
+## 🎯 Responsabilidades
 
-## 🔗 Navegação
-
-**[🏠 AslamSys](https://github.com/AslamSys)** → **[📚 _system](https://github.com/AslamSys/_system)** → **[📂 Aslam (Orange Pi 5 16GB)](https://github.com/AslamSys/_system/blob/main/hardware/mordomo%20-%20(orange-pi-5-16gb)/README.md)** → **mordomo-orchestrator**
-
-### Containers Relacionados (aslam)
-- [mordomo-audio-bridge](https://github.com/AslamSys/mordomo-audio-bridge)
-- [mordomo-audio-capture-vad](https://github.com/AslamSys/mordomo-audio-capture-vad)
-- [mordomo-wake-word-detector](https://github.com/AslamSys/mordomo-wake-word-detector)
-- [mordomo-speaker-verification](https://github.com/AslamSys/mordomo-speaker-verification)
-- [mordomo-whisper-asr](https://github.com/AslamSys/mordomo-whisper-asr)
-- [mordomo-speaker-id-diarization](https://github.com/AslamSys/mordomo-speaker-id-diarization)
-- [mordomo-source-separation](https://github.com/AslamSys/mordomo-source-separation)
-- [mordomo-core-gateway](https://github.com/AslamSys/mordomo-core-gateway)
-- [mordomo-brain](https://github.com/AslamSys/mordomo-brain)
-- [mordomo-tts-engine](https://github.com/AslamSys/mordomo-tts-engine)
-- [mordomo-system-watchdog](https://github.com/AslamSys/mordomo-system-watchdog)
-- [mordomo-openclaw-agent](https://github.com/AslamSys/mordomo-openclaw-agent)
+- Gate de autorização: só processa transcrição após `mordomo.speaker.verified`
+- Gerenciar estado de sessão por speaker (Redis db1)
+- Encaminhar texto transcrito ao brain (`mordomo.brain.generate`)
+- Despachar ações do brain para os serviços corretos (rotas dinâmicas via Redis)
+- Consultar Vault para ações sensíveis (PIX, saldo, alarme)
+- Receber resultado do IoT e emitir TTS de correção em caso de falha
+- Canal de texto para OpenClaw (WhatsApp, Telegram) via `mordomo.orchestrator.request`
 
 ---
-GET /api/events/stats
+
+## 🔌 Subscriptions NATS
+
+| Subject | Handler | Descrição |
+|---|---|---|
+| `mordomo.speaker.verified` | `handle_speaker_verified` | Registra speaker ativo, libera processamento |
+| `mordomo.speech.transcribed` | `handle_speech_transcribed` | Gate: só avança se sessão ativa; encaminha ao brain |
+| `mordomo.brain.action.*` | `handle_brain_action` | Despacha ação para o serviço alvo |
+| `mordomo.tts.started` | `handle_tts_started` | Atualiza sessão → SPEAKING |
+| `mordomo.tts.finished` | `handle_tts_finished` | Atualiza sessão → LISTENING |
+| `iot.command.executed` | `handle_iot_result` | Loop de feedback: TTS de correção se `success: false` |
+| `*.event.>` | `handle_external_event` | Armazena todos eventos no EventMemory |
+| `mordomo.orchestrator.request` | `handle_openclaw_request` | Canal texto — resolve person → brain → dispatch → reply |
+
+---
+
+## 🔐 Gate de Autorização por Voz
+
+Quando `mordomo.audio.snippet` é emitido pelo wake-word-detector, três containers processam **em paralelo**:
+- `mordomo-speaker-verification` — verifica se a voz é autorizada
+- `mordomo-whisper-asr` — transcreve o áudio
+- `mordomo-speaker-id-diarization` — identifica o speaker
+
+O orchestrator aguarda `mordomo.speaker.verified` antes de encaminhar a transcrição ao brain. Se a verificação não chegar (timeout ou rejeição), a transcrição é descartada.
+
+```
+[speaker.verified] → sessão ativa (LISTENING)
+[speech.transcribed] → só avança se sessão ativa
 ```
 
-### Estrutura de Evento Armazenado
+---
+
+## 🗺️ Rotas Dinâmicas (Redis)
+
+As rotas de despacho são carregadas do Redis db1 e cacheadas com TTL de 120s.
+
+**Chave Redis:** `mordomo:routes` (HSET)
+
+**Seed inicial** (via HSETNX ao startup):
+
+| Tipo de Ação | Subject NATS |
+|---|---|
+| `iot` | `iot.command` |
+| `tts` | `mordomo.tts.generate` |
+| `vault` | `mordomo.vault.secret.get` |
+| `financas` | `mordomo.financas.command` |
+| `security` | `seguranca.command` |
+| `nas` | `nas.command` |
+| `pix_send` | `mordomo.financas.pix.command` |
+| `balance_query` | `mordomo.financas.contas.command` |
+| `iot_control` | `mordomo.iot.command` |
+| `alarm_control` | `mordomo.iot.command` |
+| `media_control` | `mordomo.iot.command` |
+| `openclaw_execute` | `mordomo.openclaw.command` |
+| `reminder_create` | `mordomo.brain.reminder` |
+
+```bash
+# Adicionar/alterar rota em runtime (sem restart)
+redis-cli -n 1 HSET mordomo:routes nova_acao mordomo.novoservico.command
+```
+
+---
+
+## 🏦 Vault (Ações Sensíveis)
+
+Para ações que requerem credenciais (PIX, saldo, alarme, NAS), o dispatcher consulta o vault via request/reply antes de despachar:
+
+```
+[dispatcher] mordomo.vault.secret.get (req/reply)
+Payload: {"key": "pix_token", "speaker_id": "user_1"}
+Reply:   {"secret": "...", "ok": true}
+```
+
+Ações marcadas como sensíveis em `config.VAULT_REQUIRED_ACTIONS`.
+
+---
+
+## 🔄 Loop de Resultado (Fire-and-Correct)
+
+O brain responde **otimisticamente** com texto imediatamente. As ações são despachadas em paralelo. O orchestrator fecha o loop escutando resultados:
+
+### IoT (iot.command.executed)
+Publicado pelo `mordomo-iot-orchestrator` após cada comando MQTT:
 ```json
 {
-  "timestamp": "2025-12-04T15:30:00Z",
-  "module": "mensagens",
-  "event_type": "message_received",
-  "priority": "HIGH",
-  "data": {
-    "sender": "João Silva",
-    "platform": "whatsapp",
-    "preview": "Confirma reunião amanhã?"
-  },
-  "handler_response": "Avisei sobre mensagem de João Silva"
+  "command_id": "cmd_1748023600123",
+  "device_id":  "luz_sala",
+  "success":    true,
+  "latency_ms": 45
 }
 ```
+Se `success: false`, o orchestrator emite TTS de correção para o speaker ativo.
 
-### Configuração
-- **Capacidade**: 500 eventos (FIFO circular)
-- **Retenção**: 24 horas (cleanup automático)
-- **RAM**: ~5-10MB (500 eventos)
-- **Latência**: <5ms para consultas típicas
+### Finanças
+- `mordomo.financas.pix.result` — resultado de transferência PIX
+- `mordomo.financas.contas.command` — resposta de consulta de saldo
 
-📖 **Documentação completa**: [EVENT_MEMORY.md](src/core/events/EVENT_MEMORY.md)
+Eventos armazenados no EventMemory para contexto futuro.
 
 ---
 
-## ✅ Status de Implementação
+## 📱 Canal OpenClaw (Texto)
 
-- ✅ **Action Dispatcher**: Sistema universal de roteamento com Service Discovery (Consul)
-- ✅ **Event System**: Fila de prioridade para notificações assíncronas de módulos
-- ✅ **Event Memory**: Armazena eventos recentes para consultas contextuais do LLM
-- ✅ **Event Handlers**: Políticas automáticas (intruso, mensagens, temperatura, etc.)
-- ✅ **LLM Service**: LiteLLM com fallback Cloud → Local (qwen2.5:1.5b)
-- ✅ **Semantic Cache**: FAISS para bypass de LLM em comandos frequentes
-- ⏳ **Session Controller**: Máquina de estados de conversação (a implementar)
-- ⏳ **REST API**: Endpoint de status/saúde (a implementar)
-- ⏳ **PostgreSQL Integration**: Persistência de conversas e logs (a implementar)
+OpenClaw (agente WhatsApp/Telegram) publica em `mordomo.orchestrator.request`:
 
-## 🔌 Integrações NATS
+```json
+{
+  "user_id":    "whatsapp:+5511999999999",
+  "channel":    "whatsapp",
+  "text":       "liga a luz da sala",
+  "session_id": "ocl_abc123"
+}
+```
 
-### Subscriptions (Escuta)
-- `*.event.>`: Todos os eventos de módulos externos (wildcard)
-- `*.response`: Respostas de comandos despachados
-- `mordomo.speech.transcribed`: Texto do STT (a implementar)
-
-### Publications (Publica)
-- `{module}.command`: Comandos para módulos (via Action Dispatcher)
-- `tts.generate_request`: Solicitação de síntese de voz (a implementar)
-- `system.orchestrator.status`: Heartbeat e status (a implementar)
+Fluxo:
+1. Resolve `person_id` via `mordomo.people.resolve`
+2. Envia ao brain via `mordomo.brain.generate` (request/reply)
+3. Despacha ações em paralelo (fire-and-forget)
+4. Responde no `msg.reply` com `{"text": "Pronto, luz acesa!"}`
 
 ---
 
-## 🔐 Vault Integration
+## 💾 Sessões (Redis db1)
 
-O orchestrator é o **ponto central de consulta ao vault**. Após identificar a intenção do usuário e antes de despachar ações sensíveis, o Action Dispatcher interno consulta o `mordomo-vault` com o contexto de voz da sessão.
+| Chave | Tipo | TTL | Conteúdo |
+|---|---|---|---|
+| `session:{speaker_id}` | String (JSON) | `SESSION_TTL_SECONDS` | `{speaker_id, state, confidence}` |
+
+**Estados da sessão:**
 
 ```
-Session Controller mantém: { active_person_id, confidence }
-       ↓
-Action Dispatcher detecta ação sensível (ex: PIX, trade)
-       ↓
-mordomo.vault.secret.get {
-  secret_key: "asaas_api_key",
-  requester_module: "mordomo-financas-pix",
-  auth_mode: "voice",
-  person_id: active_person_id,    ← vem do speaker.verified
-  confidence: confidence           ← vem do speaker.verified
-}
-       ↓
-Vault responde → API key é incluída no payload para o módulo destino
+IDLE → LISTENING → THINKING → SPEAKING → LISTENING/IDLE
+                 ↑
+         (speaker.verified)
 ```
 
-**Ações que passam pelo vault antes de despachar:**
-| Ação | Secret consultado | Confiança mínima |
+---
+
+## ⚙️ Configuração (Variáveis de Ambiente)
+
+| Variável | Default | Descrição |
 |---|---|---|
-| PIX / transferência | `asaas_api_key` | 0.95 |
-| Consulta de saldo | `asaas_api_key` | 0.80 |
-| Trade manual | escalado para investimentos-brain | — |
-
-Veja: [mordomo-vault](https://github.com/AslamSys/mordomo-vault)
+| `NATS_URL` | `nats://nats:4222` | Servidor NATS |
+| `REDIS_URL` | `redis://redis:6379/1` | Redis db1 |
+| `SESSION_TTL_SECONDS` | `300` | TTL de sessão inativa |
+| `ROUTES_CACHE_TTL` | `120` | TTL do cache de rotas |
+| `VAULT_URL` | — | URL do mordomo-vault (opcional) |
 
 ---
 
-## 🏗️ Implementação
-
-### Estrutura do Container
+## 🗂️ Estrutura de Arquivos
 
 ```
-mordomo-orchestrator/
-├── src/
-│   ├── __init__.py
-│   ├── config.py        # NATS URL, Redis URL, subjects, action routes
-│   ├── session.py       # SessionController — máquina de estados via Redis db1
-│   ├── events.py        # EventMemory — buffer circular in-memory (500 eventos)
-│   ├── vault.py         # Helper request/reply para mordomo-vault
-│   ├── dispatcher.py    # ActionDispatcher — roteia ações do brain para NATS
-│   ├── handlers.py      # Handlers NATS (speaker, speech, brain, tts, events, openclaw)
-│   └── main.py          # Entry point — asyncio + subscrições NATS
-├── Dockerfile
-├── docker-compose.yml
-├── requirements.txt
-└── .env.example
+src/
+  config.py       # Variáveis de ambiente, subjects NATS, constantes
+  session.py      # Estado de sessão por speaker (Redis db1)
+  events.py       # EventMemory — ring buffer de eventos recentes
+  vault.py        # Consulta mordomo-vault para ações sensíveis
+  routes.py       # fetch_routes(), init_routes() — Redis mordomo:routes
+  dispatcher.py   # dispatch(): resolve subject, vault check, publish
+  handlers.py     # Todos os handlers NATS
+  main.py         # Conecta NATS, init_routes(), todas as subscriptions
 ```
 
-### Infra Utilizada
+---
 
-| Serviço | Uso |
-|---|---|
-| `mordomo-nats` | Toda comunicação — subscribe 7 subjects, publish para brain/tts/vault/people/módulos |
-| `mordomo-redis` (db1) | Estado de sessão por `speaker_id` (`session:{speaker_id}`, TTL 300s) |
-| `mordomo-vault` | Request/reply para buscar secrets antes de ações sensíveis (PIX, saldo) |
-| `mordomo-people` | Request/reply para resolver `user_id` (canal de texto) → `person_id` |
+## 🐳 Docker
 
-### Fluxo Principal de Voz
-
-```
-mordomo.speaker.verified  → session.update_speaker (LISTENING)
-mordomo.speech.transcribed → set_state(THINKING) → mordomo.brain.generate
-mordomo.brain.action.*    → dispatcher → {module}.command / mordomo.vault / etc
-mordomo.tts.started       → set_state(SPEAKING)
-mordomo.tts.finished      → set_state(LISTENING)
+```yaml
+# deploy: brain/docker-compose.yml
+mordomo-orchestrator:
+  image: ghcr.io/aslamsys/mordomo-orchestrator:latest
+  environment:
+    NATS_URL: nats://nats:4222
+    REDIS_URL: redis://redis:6379/1
+  depends_on:
+    - nats
+    - redis
 ```
 
-### Fluxo de Canais de Texto (OpenClaw)
+---
 
-```
-mordomo.orchestrator.request  →  resolve person_id (mordomo.people.resolve)
-                              →  mordomo.brain.generate (request/reply)
-                              →  dispatcher → {module}.command (IoT, finanças, segurança, etc.)
-                              →  reply_to (texto de resposta de volta ao OpenClaw)
-```
+## 🚀 CI/CD
 
-**OpenClaw é apenas mais uma fonte de entrada.** Não tem acesso direto a nenhum módulo — tudo passa pelo Orchestrator, que aplica as mesmas regras de vault, dispatch e auditoria do fluxo de voz.
+Build automático via GitHub Actions → `ghcr.io/aslamsys/mordomo-orchestrator:latest`
+
+Workflow: [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — usa reusable workflow `AslamSys/.github`
