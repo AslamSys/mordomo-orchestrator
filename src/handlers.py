@@ -74,24 +74,18 @@ async def handle_brain_action(nc: NATS, msg: Msg) -> None:
         logger.error("handle_brain_action error: %s", exc)
 
 
-async def handle_tts_started(msg: Msg) -> None:
-    """When TTS starts speaking, update session state."""
+async def handle_tts_status(msg: Msg) -> None:
+    """Receive tts.status.* events and update session state accordingly."""
     try:
         data = json.loads(msg.data.decode())
         speaker_id = data.get("speaker_id", "unknown")
-        await session.set_state(speaker_id, SessionState.SPEAKING)
+        status = data.get("status", "")
+        if status == "started":
+            await session.set_state(speaker_id, SessionState.SPEAKING)
+        elif status in ("completed", "interrupted"):
+            await session.set_state(speaker_id, SessionState.LISTENING)
     except Exception as exc:
-        logger.error("handle_tts_started error: %s", exc)
-
-
-async def handle_tts_finished(msg: Msg) -> None:
-    """When TTS finishes, return session to LISTENING."""
-    try:
-        data = json.loads(msg.data.decode())
-        speaker_id = data.get("speaker_id", "unknown")
-        await session.set_state(speaker_id, SessionState.LISTENING)
-    except Exception as exc:
-        logger.error("handle_tts_finished error: %s", exc)
+        logger.error("handle_tts_status error: %s", exc)
 
 
 async def handle_external_event(msg: Msg) -> None:

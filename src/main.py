@@ -30,8 +30,7 @@ from .handlers import (
     handle_openclaw_request,
     handle_speaker_verified,
     handle_speech_transcribed,
-    handle_tts_finished,
-    handle_tts_started,
+    handle_tts_status,
 )
 
 logging.basicConfig(
@@ -85,12 +84,8 @@ async def main() -> None:
         cb=_on_brain_action,
     )
     await nc.subscribe(
-        "mordomo.tts.started",
-        cb=handle_tts_started,
-    )
-    await nc.subscribe(
-        "mordomo.tts.finished",
-        cb=handle_tts_finished,
+        config.SUBJECT_TTS_STATUS + ".*",
+        cb=handle_tts_status,
     )
     async def _on_iot_result(msg: Msg) -> None:
         asyncio.create_task(handle_iot_result(nc, msg))

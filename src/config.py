@@ -16,6 +16,7 @@ VAULT_REQUEST_TIMEOUT = float(os.getenv("VAULT_REQUEST_TIMEOUT", "3.0"))
 SUBJECT_SPEAKER_VERIFIED = "mordomo.speaker.verified"
 SUBJECT_SPEECH_TRANSCRIBED = "mordomo.speech.transcribed"
 SUBJECT_BRAIN_ACTION = "mordomo.brain.action."  # prefix, subscribe mordomo.brain.action.*
+SUBJECT_TTS_STATUS = "mordomo.tts.status"  # prefix; subscribe mordomo.tts.status.*
 SUBJECT_EVENTS_WILDCARD = "*.event.>"
 SUBJECT_OPENCLAW_REQUEST = "mordomo.orchestrator.request"  # texto vindo do OpenClaw
 
@@ -37,7 +38,7 @@ ROUTES_CACHE_TTL = int(os.getenv("ROUTES_CACHE_TTL", "120"))
 # These are seeded into Redis db1 (mordomo:routes) via HSETNX at startup.
 # Any service can override by writing directly to Redis.
 ACTION_ROUTES: dict[str, str] = {
-    "iot": "iot.command",
+    "iot": "mordomo.iot.command",
     "tts": "mordomo.tts.generate",
     "vault": "mordomo.vault.secret.get",
     "financas": "mordomo.financas.command",
