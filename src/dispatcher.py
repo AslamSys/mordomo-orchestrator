@@ -12,6 +12,7 @@ from nats.aio.client import Client as NATS
 
 from . import config
 from . import vault as vault_client
+from .routes import get_routes
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +44,9 @@ async def dispatch(
                 return
             action_payload["__secret"] = secret
 
-    # Resolve target subject
-    target = _resolve_subject(action_type, action_payload)
+    # Resolve target subject (dynamic via Redis, falls back to static seed)
+    routes = await get_routes()
+    target = _resolve_subject(action_type, action_payload, routes)
     if not target:
         logger.warning("no route for action type: %s", action_type)
         return
@@ -59,13 +61,13 @@ async def dispatch(
     logger.info("dispatched %s → %s", action_type, target)
 
 
-def _resolve_subject(action_type: str, payload: dict) -> str | None:
+def _resolve_subject(action_type: str, payload: dict, routes: dict[str, str]) -> str | None:
     # Exact match first
-    if action_type in config.ACTION_ROUTES:
-        return config.ACTION_ROUTES[action_type]
+    if action_type in routes:
+        return routes[action_type]
     # Prefix match (e.g. "iot.turn_on" → "iot")
     prefix = action_type.split(".")[0]
-    return config.ACTION_ROUTES.get(prefix)
+    return routes.get(prefix)
 
 
 def _secret_for_action(action_type: str) -> str | None:

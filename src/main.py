@@ -21,6 +21,7 @@ from nats.aio.msg import Msg
 
 from . import config, session
 from .events import memory as event_memory
+from .routes import init_routes
 from .handlers import (
     handle_brain_action,
     handle_external_event,
@@ -56,6 +57,9 @@ async def main() -> None:
         max_reconnect_attempts=-1,
     )
     logger.info("connected to NATS at %s", config.NATS_URL)
+
+    await init_routes()
+    logger.info("routes initialized")
 
     async def _on_speech_transcribed(msg: Msg) -> None:
         asyncio.create_task(handle_speech_transcribed(nc, msg))

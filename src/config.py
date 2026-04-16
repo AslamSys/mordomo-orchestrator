@@ -30,7 +30,12 @@ SUBJECT_PEOPLE_RESOLVE = "mordomo.people.resolve"
 OPENCLAW_BRAIN_TIMEOUT = float(os.getenv("OPENCLAW_BRAIN_TIMEOUT", "30.0"))
 OPENCLAW_PEOPLE_TIMEOUT = float(os.getenv("OPENCLAW_PEOPLE_TIMEOUT", "3.0"))
 
-# Action routing: action type → NATS subject prefix
+# Routes cache TTL (seconds)
+ROUTES_CACHE_TTL = int(os.getenv("ROUTES_CACHE_TTL", "120"))
+
+# Action routing seed defaults: action type → NATS subject
+# These are seeded into Redis db1 (mordomo:routes) via HSETNX at startup.
+# Any service can override by writing directly to Redis.
 ACTION_ROUTES: dict[str, str] = {
     "iot": "iot.command",
     "tts": "mordomo.tts.generate",
