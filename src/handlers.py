@@ -50,6 +50,7 @@ async def handle_speech_transcribed(nc: NATS, msg: Msg) -> None:
             "speaker_id": speaker_id,
             "text": text,
             "confidence": sess.get("confidence", 0.0),
+            "source": "mordomo",
         }).encode()
 
         await nc.publish(config.SUBJECT_BRAIN_GENERATE, brain_payload)
@@ -190,6 +191,8 @@ async def handle_openclaw_request(nc: NATS, msg: Msg) -> None:
             "speaker_id": speaker_id,
             "text": text,
             "confidence": confidence,
+            "source": "openclaw",
+            "channel": channel
         }).encode()
 
         brain_resp = await nc.request(
